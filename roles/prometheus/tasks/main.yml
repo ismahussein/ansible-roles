@@ -1,61 +1,44 @@
 ---
-- name: Create the Node Exporter group
+# tasks file for ansible-prometheus
+
+- name: "Create Prometheus group"
   group:
-    name: "{{ prometheus_node_exporter_service_group }}"
+    name: "{{ prometheus_group }}"
     state: present
-    system: true
 
-- name: Create the Node Exporter user
+- name: "Create Prometheus system user"
   user:
-    name: "{{ prometheus_node_exporter_service_username }}"
-    groups: "{{ prometheus_node_exporter_service_group }}"
-    append: true
-    shell: /bin/bash
-  when: prometheus_node_exporter_manage_user
+    name: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    createhome: no
+    shell: "/sbin/nologin"
+    comment: "Prometheus System user"
+    state: present
 
-- name: Check if the version of Node Exporter already exists
-  stat:
-    path: "/opt/node_exporter-{{ prometheus_node_exporter_version }}.linux-amd64"
-  register: prometheus_node_exporter_install_path
-
-- name: Download Node Exporter
-  get_url:
-    url: "{{ prometheus_node_exporter_download_url }}"
-    dest: "/tmp/node_exporter-{{ prometheus_node_exporter_version }}.tar.gz"
-  when: not prometheus_node_exporter_install_path.stat.exists
-
-- name: Extract Node Exporter into the install directory
-  unarchive:
-    src: "/tmp/node_exporter-{{ prometheus_node_exporter_version }}.tar.gz"
-    dest: "/opt/"
-    copy: false
-    owner: "{{ prometheus_node_exporter_service_username }}"
-    group: "{{ prometheus_node_exporter_service_group }}"
-  when: not prometheus_node_exporter_install_path.stat.exists
-
-- name: Create a symlink for /opt/node_exporter
+- name: "Create Prometheus directories"
   file:
-    src: "/opt/node_exporter-{{ prometheus_node_exporter_version }}.linux-amd64"
-    dest: /opt/node_exporter
-    owner: "{{ prometheus_node_exporter_service_username }}"
-    group: "{{ prometheus_node_exporter_service_group }}"
-    state: link
-  when: not prometheus_node_exporter_install_path.stat.exists
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ prometheus_user }}"
+    group: "{{ prometheus_group }}"
+    mode: "u=rwx,g=rx,o="
+  with_items:
+    - "{{ prometheus_path_install }}"
+    - "{{ prometheus_path_config }}"
+    - "{{ prometheus_path_log }}"
+    - "{{ prometheus_path_pid }}"
 
-- name: Copy the Node Exporter systemd service file
-  template:
-    src: node-exporter.service.j2
-    dest: /etc/systemd/system/node_exporter.service
-    owner: root
-    group: root
-    mode: 0644
-  notify:
-    - reload systemd
-    - restart node_exporter
+- name: "Set role facts"
+  include: setup-facts.yml
 
-- name: Ensure Node Exporter is started and enabled on boot
-  service:
-    name: node_exporter
-    state: started
-    enabled: true
+- name: "Install Node Exporter"
+  include: setup-nodeexporter.yml
+  when: '"node_exporter" in prometheus_components'
 
+- name: "Install Alert manager"
+  include: setup-alertmanager.yml
+  when: '"alertmanager" in prometheus_components'
+
+- name: "Install Prometheus"
+  include: setup-prometheus.yml
+  when: '"prometheus" in prometheus_components'

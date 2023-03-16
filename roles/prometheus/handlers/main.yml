@@ -1,10 +1,17 @@
 ---
-- name: reload systemd
-  systemd:
-    name: systemd
-    daemon_reload: true
+# handlers file for ansible-prometheus
 
-- name: restart node_exporter
-  systemd:
-    name: node_exporter
+- name: "restart prometheus service"
+  service:
+    name: "{{ prometheus_service_name }}"
+    state: restarted
+
+- name: "restart alertmanager service"
+  service:
+    name: "{{ alertmanager_service_name }}"
+    state: restarted
+
+- name: "restart nodeexporter service"
+  service:
+    name: "{{ nodeexporter_service_name }}"
     state: restarted
